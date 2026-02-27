@@ -29,9 +29,7 @@ def create_sales_order_for_ticket(doc, event):
         "items": [
             {
                 "item_code": "Support",
-                "description": f"Helpdesk Ticket: {subject}
-
-{description}",
+                "description": f"Helpdesk Ticket: {subject}\n\n{description}",
                 "qty": 1,
                 "rate": 0
             }
