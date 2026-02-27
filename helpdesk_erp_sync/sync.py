@@ -3,7 +3,7 @@ import frappe
 
 def create_sales_order_for_ticket(doc, event):
     ticket = doc
-    customer_email = ticket.email
+    customer_email = ticket.raised_by
     subject = ticket.subject or "Support Ticket"
     description = ticket.description or ""
 
