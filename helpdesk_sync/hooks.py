@@ -5,11 +5,6 @@ app_description = "Sync ERPNext Customer -> Helpdesk HD Customer"
 app_email = "info@example.com"
 app_license = "mit"
 
-required_apps = [
-    "frappe/frappe @ >=16.0.0 <17.0.0",
-    "frappe/erpnext @ >=16.0.0 <17.0.0",
-    "frappe/helpdesk @ >=2.0.0",
-]
 
 # ---------------------------------------------------------------------------
 # Document Events
