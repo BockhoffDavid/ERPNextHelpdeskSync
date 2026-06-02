@@ -23,4 +23,7 @@ doc_events = {
         "before_insert": "helpdesk_sync.sync.guard_hd_customer_insert",
         "before_rename": "helpdesk_sync.sync.guard_hd_customer_rename",
     },
+    "HD Ticket": {
+        "after_insert": "helpdesk_sync.sync.create_project_from_ticket",
+    },
 }

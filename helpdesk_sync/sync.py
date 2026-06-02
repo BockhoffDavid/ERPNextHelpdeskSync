@@ -183,6 +183,29 @@ def guard_hd_customer_rename(doc, method=None, old=None, new=None, merge=False):
 
 
 # ---------------------------------------------------------------------------
+# HD Ticket -> ERPNext Project
+# ---------------------------------------------------------------------------
+
+def create_project_from_ticket(doc, method=None):
+    """Legt für jedes neue HD Ticket ein ERPNext-Projekt an."""
+    project = frappe.new_doc("Project")
+    project.project_name = f"{doc.name} - {doc.subject}"
+
+    if doc.get("customer"):
+        project.customer = doc.customer
+
+    priority = doc.get("priority")
+    if priority:
+        project.priority = priority
+
+    description = doc.get("description")
+    if description:
+        project.description = description
+
+    project.insert(ignore_permissions=True)
+
+
+# ---------------------------------------------------------------------------
 # Hilfsfunktionen
 # ---------------------------------------------------------------------------
 
