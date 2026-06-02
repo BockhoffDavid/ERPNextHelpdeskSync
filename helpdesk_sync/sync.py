@@ -56,16 +56,13 @@ def upsert_hd_customer(doc, method=None):
 
 
 def _apply_fields(hd, customer):
-    """Mappt Felder vom Customer auf den HD Customer.
-
-    Das HD-Customer-DocType hat in der Standardinstallation v. a.:
-      - customer_name (Pflicht-/Anzeigefeld)
-      - domain (für E-Mail-Domain-basierte Ticketzuordnung)
-    Weitere Felder können hier ergänzt werden.
-    """
+    """Mappt Felder vom Customer auf den HD Customer."""
     hd.customer_name = customer.customer_name or customer.name
 
-    # E-Mail-Domain für automatische Ticketzuordnung ableiten, falls vorhanden.
+    for field in ("customer_type", "customer_group", "territory"):
+        if hd.meta.has_field(field) and customer.get(field):
+            setattr(hd, field, customer.get(field))
+
     domain = _derive_domain(customer)
     if domain and hd.meta.has_field("domain"):
         hd.domain = domain
@@ -127,7 +124,41 @@ def on_customer_trash(doc, method=None):
 
 
 # ---------------------------------------------------------------------------
-# Guards: manuelles Anlegen / Umbenennen im Helpdesk verhindern
+# HD Customer -> ERPNext Customer (Rückrichtung)
+# ---------------------------------------------------------------------------
+
+def create_customer_from_hd_customer(doc, method=None):
+    """Legt einen ERPNext Customer an, wenn ein HD Customer manuell erstellt wird.
+
+    Wird der HD Customer durch den ERPNext-Sync ausgelöst (_SYNC_FLAG gesetzt),
+    wird diese Funktion übersprungen um eine Endlosschleife zu verhindern.
+    """
+    if doc.flags.get(_SYNC_FLAG):
+        return
+    if frappe.db.exists("Customer", doc.name):
+        return
+
+    selling_settings = frappe.get_single("Selling Settings")
+
+    customer = frappe.new_doc("Customer")
+    customer.customer_name = doc.customer_name or doc.name
+    customer.customer_type = doc.get("customer_type") or "Company"
+    customer.customer_group = (
+        doc.get("customer_group")
+        or selling_settings.get("customer_group")
+        or "All Customer Groups"
+    )
+    customer.territory = (
+        doc.get("territory")
+        or selling_settings.get("territory")
+        or "All Territories"
+    )
+    customer.flags[_SYNC_FLAG] = True
+    customer.insert(ignore_permissions=True, set_name=doc.name)
+
+
+# ---------------------------------------------------------------------------
+# Guards: Umbenennen im Helpdesk verhindern
 # ---------------------------------------------------------------------------
 
 def guard_hd_customer_insert(doc, method=None):

@@ -14,6 +14,8 @@ app_license = "mit"
 #    bestehenden ERPNext-Customer stammt.
 # ---------------------------------------------------------------------------
 
+fixtures = ["Custom Field"]
+
 doc_events = {
     "Customer": {
         "after_insert": "helpdesk_sync.sync.upsert_hd_customer",
@@ -21,7 +23,7 @@ doc_events = {
         "on_trash": "helpdesk_sync.sync.on_customer_trash",
     },
     "HD Customer": {
-        "before_insert": "helpdesk_sync.sync.guard_hd_customer_insert",
+        "after_insert": "helpdesk_sync.sync.create_customer_from_hd_customer",
         "before_rename": "helpdesk_sync.sync.guard_hd_customer_rename",
     },
     "HD Ticket": {

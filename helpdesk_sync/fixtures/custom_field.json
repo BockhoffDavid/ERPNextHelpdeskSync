@@ -1,0 +1,33 @@
+[
+    {
+        "doctype": "Custom Field",
+        "dt": "HD Customer",
+        "fieldname": "customer_type",
+        "label": "Customer Type",
+        "fieldtype": "Select",
+        "options": "Company\nIndividual\nPartnership",
+        "default": "Company",
+        "insert_after": "customer_name",
+        "reqd": 0
+    },
+    {
+        "doctype": "Custom Field",
+        "dt": "HD Customer",
+        "fieldname": "customer_group",
+        "label": "Customer Group",
+        "fieldtype": "Link",
+        "options": "Customer Group",
+        "insert_after": "customer_type",
+        "reqd": 0
+    },
+    {
+        "doctype": "Custom Field",
+        "dt": "HD Customer",
+        "fieldname": "territory",
+        "label": "Territory",
+        "fieldtype": "Link",
+        "options": "Territory",
+        "insert_after": "customer_group",
+        "reqd": 0
+    }
+]
