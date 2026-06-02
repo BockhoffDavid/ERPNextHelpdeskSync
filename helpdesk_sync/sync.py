@@ -56,16 +56,13 @@ def upsert_hd_customer(doc, method=None):
 
 
 def _apply_fields(hd, customer):
-    """Mappt Felder vom Customer auf den HD Customer.
-
-    Das HD-Customer-DocType hat in der Standardinstallation v. a.:
-      - customer_name (Pflicht-/Anzeigefeld)
-      - domain (für E-Mail-Domain-basierte Ticketzuordnung)
-    Weitere Felder können hier ergänzt werden.
-    """
+    """Mappt Felder vom Customer auf den HD Customer."""
     hd.customer_name = customer.customer_name or customer.name
 
-    # E-Mail-Domain für automatische Ticketzuordnung ableiten, falls vorhanden.
+    for field in ("customer_type", "customer_group", "territory"):
+        if hd.meta.has_field(field) and customer.get(field):
+            setattr(hd, field, customer.get(field))
+
     domain = _derive_domain(customer)
     if domain and hd.meta.has_field("domain"):
         hd.domain = domain
@@ -127,7 +124,41 @@ def on_customer_trash(doc, method=None):
 
 
 # ---------------------------------------------------------------------------
-# Guards: manuelles Anlegen / Umbenennen im Helpdesk verhindern
+# HD Customer -> ERPNext Customer (Rückrichtung)
+# ---------------------------------------------------------------------------
+
+def create_customer_from_hd_customer(doc, method=None):
+    """Legt einen ERPNext Customer an, wenn ein HD Customer manuell erstellt wird.
+
+    Wird der HD Customer durch den ERPNext-Sync ausgelöst (_SYNC_FLAG gesetzt),
+    wird diese Funktion übersprungen um eine Endlosschleife zu verhindern.
+    """
+    if doc.flags.get(_SYNC_FLAG):
+        return
+    if frappe.db.exists("Customer", doc.name):
+        return
+
+    selling_settings = frappe.get_single("Selling Settings")
+
+    customer = frappe.new_doc("Customer")
+    customer.customer_name = doc.customer_name or doc.name
+    customer.customer_type = doc.get("customer_type") or "Company"
+    customer.customer_group = (
+        doc.get("customer_group")
+        or selling_settings.get("customer_group")
+        or "All Customer Groups"
+    )
+    customer.territory = (
+        doc.get("territory")
+        or selling_settings.get("territory")
+        or "All Territories"
+    )
+    customer.flags[_SYNC_FLAG] = True
+    customer.insert(ignore_permissions=True, set_name=doc.name)
+
+
+# ---------------------------------------------------------------------------
+# Guards: Umbenennen im Helpdesk verhindern
 # ---------------------------------------------------------------------------
 
 def guard_hd_customer_insert(doc, method=None):
@@ -180,6 +211,82 @@ def guard_hd_customer_rename(doc, method=None, old=None, new=None, merge=False):
         ),
         title=_("Umbenennen blockiert"),
     )
+
+
+# ---------------------------------------------------------------------------
+# HD Ticket <-> ERPNext Project  (bidirektionale Kundensync)
+# ---------------------------------------------------------------------------
+
+# Verhindert Sync-Schleifen: gesetzt bevor ein Gegenstück gespeichert wird.
+_TICKET_SYNC_FLAG = "_sync_from_ticket_project"
+
+
+def create_project_from_ticket(doc, method=None):
+    """Legt für jedes neue HD Ticket ein ERPNext-Projekt an."""
+    project = frappe.new_doc("Project")
+    project.project_name = f"{doc.name} - {doc.subject}"
+
+    if doc.get("customer"):
+        project.customer = doc.customer
+
+    priority = doc.get("priority")
+    if priority:
+        project.priority = priority
+
+    description = doc.get("description")
+    if description:
+        project.description = description
+
+    project.insert(ignore_permissions=True)
+
+
+def on_ticket_update(doc, method=None):
+    """Überträgt Kundenänderung vom HD Ticket auf das verknüpfte Projekt."""
+    if doc.flags.get(_TICKET_SYNC_FLAG):
+        return
+    project = _find_project_for_ticket(doc.name)
+    if not project:
+        return
+    if (project.customer or "") == (doc.get("customer") or ""):
+        return
+    project.flags[_TICKET_SYNC_FLAG] = True
+    project.customer = doc.get("customer") or ""
+    project.save(ignore_permissions=True)
+
+
+def on_project_update(doc, method=None):
+    """Überträgt Kundenänderung vom Projekt auf das verknüpfte HD Ticket."""
+    if doc.flags.get(_TICKET_SYNC_FLAG):
+        return
+    ticket_name = _extract_ticket_name(doc.project_name)
+    if not ticket_name or not frappe.db.exists("HD Ticket", ticket_name):
+        return
+    ticket = frappe.get_doc("HD Ticket", ticket_name)
+    if (ticket.get("customer") or "") == (doc.customer or ""):
+        return
+    ticket.flags[_TICKET_SYNC_FLAG] = True
+    ticket.customer = doc.customer or ""
+    ticket.save(ignore_permissions=True)
+
+
+def _find_project_for_ticket(ticket_name):
+    """Gibt das zum Ticket gehörende Projekt-Dokument zurück oder None."""
+    results = frappe.get_all(
+        "Project",
+        filters={"project_name": ["like", f"{ticket_name} - %"]},
+        fields=["name"],
+        limit=1,
+    )
+    if not results:
+        return None
+    return frappe.get_doc("Project", results[0].name)
+
+
+def _extract_ticket_name(project_name):
+    """Extrahiert die Ticket-ID aus dem Projektnamen (Format: 'ID - Betreff')."""
+    if " - " in (project_name or ""):
+        return project_name.split(" - ", 1)[0]
+    return None
 
 
 # ---------------------------------------------------------------------------
