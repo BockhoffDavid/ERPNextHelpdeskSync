@@ -183,8 +183,12 @@ def guard_hd_customer_rename(doc, method=None, old=None, new=None, merge=False):
 
 
 # ---------------------------------------------------------------------------
-# HD Ticket -> ERPNext Project
+# HD Ticket <-> ERPNext Project  (bidirektionale Kundensync)
 # ---------------------------------------------------------------------------
+
+# Verhindert Sync-Schleifen: gesetzt bevor ein Gegenstück gespeichert wird.
+_TICKET_SYNC_FLAG = "_sync_from_ticket_project"
+
 
 def create_project_from_ticket(doc, method=None):
     """Legt für jedes neue HD Ticket ein ERPNext-Projekt an."""
@@ -203,6 +207,55 @@ def create_project_from_ticket(doc, method=None):
         project.description = description
 
     project.insert(ignore_permissions=True)
+
+
+def on_ticket_update(doc, method=None):
+    """Überträgt Kundenänderung vom HD Ticket auf das verknüpfte Projekt."""
+    if doc.flags.get(_TICKET_SYNC_FLAG):
+        return
+    project = _find_project_for_ticket(doc.name)
+    if not project:
+        return
+    if (project.customer or "") == (doc.get("customer") or ""):
+        return
+    project.flags[_TICKET_SYNC_FLAG] = True
+    project.customer = doc.get("customer") or ""
+    project.save(ignore_permissions=True)
+
+
+def on_project_update(doc, method=None):
+    """Überträgt Kundenänderung vom Projekt auf das verknüpfte HD Ticket."""
+    if doc.flags.get(_TICKET_SYNC_FLAG):
+        return
+    ticket_name = _extract_ticket_name(doc.project_name)
+    if not ticket_name or not frappe.db.exists("HD Ticket", ticket_name):
+        return
+    ticket = frappe.get_doc("HD Ticket", ticket_name)
+    if (ticket.get("customer") or "") == (doc.customer or ""):
+        return
+    ticket.flags[_TICKET_SYNC_FLAG] = True
+    ticket.customer = doc.customer or ""
+    ticket.save(ignore_permissions=True)
+
+
+def _find_project_for_ticket(ticket_name):
+    """Gibt das zum Ticket gehörende Projekt-Dokument zurück oder None."""
+    results = frappe.get_all(
+        "Project",
+        filters={"project_name": ["like", f"{ticket_name} - %"]},
+        fields=["name"],
+        limit=1,
+    )
+    if not results:
+        return None
+    return frappe.get_doc("Project", results[0].name)
+
+
+def _extract_ticket_name(project_name):
+    """Extrahiert die Ticket-ID aus dem Projektnamen (Format: 'ID - Betreff')."""
+    if " - " in (project_name or ""):
+        return project_name.split(" - ", 1)[0]
+    return None
 
 
 # ---------------------------------------------------------------------------

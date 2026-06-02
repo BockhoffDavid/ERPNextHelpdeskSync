@@ -25,5 +25,9 @@ doc_events = {
     },
     "HD Ticket": {
         "after_insert": "helpdesk_sync.sync.create_project_from_ticket",
+        "on_update": "helpdesk_sync.sync.on_ticket_update",
+    },
+    "Project": {
+        "on_update": "helpdesk_sync.sync.on_project_update",
     },
 }
