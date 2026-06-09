@@ -63,7 +63,11 @@ def _apply_fields(hd, customer):
       - domain (für E-Mail-Domain-basierte Ticketzuordnung)
     Weitere Felder können hier ergänzt werden.
     """
-    hd.customer_name = customer.customer_name or customer.name
+    hd.customer_name = (
+        f"{customer.customer_name} {customer.name}"
+        if customer.customer_name
+        else customer.name
+    )
 
     # E-Mail-Domain für automatische Ticketzuordnung ableiten, falls vorhanden.
     domain = _derive_domain(customer)
